@@ -28,7 +28,7 @@ The status page is a KernelSU feature. On Magisk, open it with a WebUI app (for 
 
 ## Settings
 
-Change them in the status page (**Settings** card, then **Save settings**), or edit the root-only file `/data/adb/modem_recovery_enable/config.txt` as root. Apps cannot read or change that file. While logging is on, `ModemRecoveryLogs/config_readonly.txt` is a read-only copy; edits to it are ignored. With logging off the folder does not exist.
+Change them in the status page (**Settings** card, then **Save settings**), or edit the root-only file `/data/adb/modem_recovery_enable/config.txt` as root. While logging is on, `ModemRecoveryLogs/config_readonly.txt` is a read-only copy; edits to it are ignored. With logging off the folder does not exist.
 
 ```
 logging=off
