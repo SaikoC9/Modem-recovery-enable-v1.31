@@ -1,0 +1,6 @@
+id=modem_recovery_enable
+name=Modem Recovery Enable
+version=1.31
+versionCode=32
+author=saikoC9
+description=Keeps modem (mss) remoteproc recovery enabled from early boot and re-checks it every second so a modem crash restarts the modem instead of rebooting the phone. Optional dual-SIM guard (off by default): powers off only the crash-looping SIM (set sim_guard=on and problem_sim in config.txt) and turns it back on when safe. Single SIM: the modem just restarts. Optional airplane-mode breaker (off by default). Logging is off by default; switch it on to keep logs in Internal storage/ModemRecoveryLogs (switching it off deletes that folder). Open the module in the manager for a status page (WebUI).

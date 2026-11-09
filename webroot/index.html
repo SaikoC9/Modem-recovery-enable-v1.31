@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modem Recovery</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg:#f4f5f7; --card:#ffffff; --fg:#14171c; --muted:#5e6672; --line:#e2e5ea;
+    --accent:#2f6bdc; --good:#1a7f37; --warn:#b45309; --bar:#2f6bdc; --track:#c9ced6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f1114; --card:#1a1d22; --fg:#eceef1; --muted:#9aa3af; --line:#2a2e35;
+      --accent:#6c9bff; --good:#5fd37a; --warn:#f0b04a; --bar:#6c9bff; --track:#4a505a;
+    }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; }
+  body {
+    background:var(--bg); color:var(--fg);
+    font:11.5px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding:11px 11px calc(16px + env(safe-area-inset-bottom, 0px));
+    max-width:520px; margin:0 auto; overflow-x:hidden;
+  }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:11px; padding:11px; margin-bottom:8px; }
+  .head { display:flex; align-items:center; gap:10px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--warn); flex:none; }
+  .dot.ok { background:var(--good); }
+  h1 { font-size:14px; margin:0; line-height:1.25; }
+  .sub { color:var(--muted); font-size:10px; margin-top:1px; }
+  .stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:8px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:11px; padding:8px 5px; text-align:center; min-width:0; }
+  .num { font-size:18px; font-weight:700; line-height:1.1; }
+  .lbl { color:var(--muted); font-size:9.5px; margin-top:2px; }
+  h2 { font-size:12px; margin:0 0 2px; }
+  .chart { display:flex; align-items:flex-end; gap:3px; height:84px; margin-top:8px; border-bottom:1px solid var(--track); }
+  .col { flex:1; min-width:0; height:100%; display:flex; align-items:flex-end; }
+  .bar { width:100%; background:var(--bar); border-radius:3px 3px 0 0; }
+  .axis { display:flex; justify-content:space-between; color:var(--muted); font-size:9.5px; margin-top:3px; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .row .t { min-width:0; }
+  .switch { position:relative; width:36px; height:21px; flex:none; }
+  .switch input { opacity:0; width:100%; height:100%; margin:0; position:absolute; inset:0; z-index:2; cursor:pointer; }
+  .slider { position:absolute; inset:0; background:var(--track); border-radius:30px; transition:background .15s; }
+  .slider::before { content:""; position:absolute; width:15px; height:15px; left:3px; top:3px; background:#fff; border-radius:50%; transition:transform .15s; }
+  .switch input:checked + .slider { background:var(--accent); }
+  .switch input:checked + .slider::before { transform:translateX(15px); }
+  button.refresh:disabled { opacity:.6; }
+  button.refresh { width:100%; font:inherit; font-weight:600; padding:8px; border:0; border-radius:9px; background:var(--accent); color:#fff; }
+  @media (prefers-color-scheme: dark) { button.refresh { color:#0f1114; } }
+  .sub.warn { color:var(--warn); }
+  .switch input:disabled { cursor:default; }
+  .switch, .switch input { outline:none; -webkit-user-select:none; user-select:none; touch-action:manipulation; }
+  .switch input:focus-visible + .slider { box-shadow:0 0 0 2px var(--accent); }
+  button.refresh { outline:none; touch-action:manipulation; }
+  .switch input:disabled + .slider { opacity:.5; }
+  .kvs { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:7px; }
+  .kv { display:flex; flex-direction:column; gap:1px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; font-size:10.5px; min-width:0; }
+  .kv span { color:var(--muted); flex:none; }
+  .kv b { font-weight:600; min-width:0; word-break:break-word; }
+  .kv b.bad { color:var(--warn); }
+  .kv b.good { color:var(--good); }
+  .note { color:var(--muted); font-size:9.5px; text-align:center; margin-top:6px; word-break:break-word; }
+  details.card > summary { list-style:none; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  details.card .sub { display:block; }
+  details.card > summary::-webkit-details-marker { display:none; }
+  details.card > summary::after { content:"\25BE"; color:var(--muted); }
+  details.card[open] > summary::after { content:"\25B4"; }
+  .sgrid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px; }
+  .set { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; font-size:10.5px; min-width:0; }
+  .set.wide { grid-column:1 / -1; }
+  .set label.n { min-width:0; line-height:1.2; }
+  .set .hint { display:none; }
+  .set input[type=text], .set input[type=number] { font:inherit; width:5em; padding:3px 5px; border:1px solid var(--line); border-radius:7px; background:var(--bg); color:var(--fg); text-align:right; }
+  .set.wide input[type=text] { width:9em; }
+  .set input:focus-visible { outline:2px solid var(--accent); }
+  .set input:disabled { opacity:.5; }
+  button.save { margin-top:8px; }
+  .autotxt { font-weight:600; color:var(--muted); padding-right:6px; }
+  .delask { margin-top:8px; padding:8px; border:1px solid var(--accent); border-radius:9px; }
+  .delask[hidden] { display:none; }
+  .delbtns { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  button.alt { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  @media (prefers-color-scheme: dark) { button.alt { color:var(--accent); } }
+  button.save:disabled { opacity:.6; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="head">
+    <div class="dot" id="dot"></div>
+    <div>
+      <h1 id="headline">Loading...</h1>
+      <div class="sub" id="subline">Reading logs...</div>
+    </div>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="num" id="nLogged">-</div><div class="lbl">Crashes logged</div></div>
+  <div class="stat"><div class="num" id="nBoot">-</div><div class="lbl">This boot</div></div>
+  <div class="stat"><div class="num" id="nLast">-</div><div class="lbl">Last crash</div></div>
+</div>
+
+<div class="card">
+  <h2>Protection</h2>
+  <div class="kvs">
+  <div class="kv"><span>Modem recovery</span><b id="kRec">-</b></div>
+  <div class="kv"><span>Service</span><b id="kSvc">-</b></div>
+  <div class="kv"><span>SIM guard</span><b id="kGuard">-</b></div>
+  <div class="kv"><span>Last boot reason</span><b id="kBoot">-</b></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Crashes per 10 minutes</h2>
+  <div class="sub" id="chartSub">Last 3 hours</div>
+  <div class="chart" id="chart" role="img" aria-label="Crashes per 10 minutes, last 3 hours"></div>
+  <div class="axis"><span id="axisStart"></span><span id="axisEnd"></span></div>
+</div>
+
+<div class="card row">
+  <div class="t">
+    <h2>Airplane breaker</h2>
+    <div class="sub" id="brSub">Turns on airplane mode to stop a crash loop</div>
+  </div>
+  <label class="switch">
+    <input type="checkbox" id="breaker" aria-label="Airplane breaker">
+    <span class="slider"></span>
+  </label>
+</div>
+
+<details class="card" id="setCard">
+  <summary><span><h2>Settings</h2><span class="sub" id="setSub">Saved in the root-only config file</span></span></summary>
+  <div class="sgrid">
+  <div class="set wide"><label class="n" for="s_logging">Save logs to storage<span class="hint">Off: no log is written and the ModemRecoveryLogs folder is deleted</span></label>
+    <label class="switch"><input type="checkbox" id="s_logging" aria-label="Save logs to storage"><span class="slider"></span></label></div>
+  <div class="set"><label class="n" for="s_sim_guard">SIM guard<span class="hint">Dual SIM: power down only the crashing SIM</span></label>
+    <label class="switch"><input type="checkbox" id="s_sim_guard" aria-label="SIM guard"><span class="slider"></span></label></div>
+  <div class="set wide"><label class="n" for="s_problem_sim">Problem SIM provider<span class="hint">Part of the name in the status bar</span></label>
+    <input type="text" id="s_problem_sim" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+  <div class="set"><label class="n" for="s_confirm">Provider confirmed<span class="hint">Needed after upgrading an old config</span></label>
+    <label class="switch"><input type="checkbox" id="s_confirm" aria-label="Provider confirmed"><span class="slider"></span></label></div>
+  <div class="set"><label class="n" for="s_auto_on">Turn SIM back on automatically<span class="hint">Follows the SIM guard (not editable)</span></label>
+    <span class="autotxt" id="auto_txt">Off</span><input type="checkbox" id="s_auto_on" hidden disabled></div>
+  <div class="set"><label class="n" for="s_retry_minutes">Retry wait (minutes)</label>
+    <input type="number" id="s_retry_minutes" inputmode="numeric" min="1" max="120" step="1"></div>
+  <div class="set"><label class="n" for="s_stable_minutes">Stable signal (minutes)</label>
+    <input type="number" id="s_stable_minutes" inputmode="numeric" min="1" max="120" step="1"></div>
+  <div class="set"><label class="n" for="s_strong_rsrp">Strong signal (dBm)<span class="hint">-140 to -40</span></label>
+    <input type="number" id="s_strong_rsrp" inputmode="numeric" min="-140" max="-40" step="1"></div>
+  <div class="set"><label class="n" for="s_max_retries">Max turn-on tries</label>
+    <input type="number" id="s_max_retries" inputmode="numeric" min="1" max="20" step="1"></div>
+  <div class="set"><label class="n" for="s_purge">Delete logs and settings on uninstall</label>
+    <label class="switch"><input type="checkbox" id="s_purge" aria-label="Delete logs and settings on uninstall"><span class="slider"></span></label></div>
+  </div>
+  <div class="delask" id="delAsk" hidden>
+    <div class="n">Delete saved logs?</div>
+    <div class="note" style="text-align:left">Turning off <b>Save logs to storage</b> deletes the ModemRecoveryLogs folder and all saved crash logs. This can't be undone.</div>
+    <div class="delbtns"><button class="refresh save" id="delYes">Delete and save</button><button class="refresh save alt" id="delNo">Cancel</button></div>
+  </div>
+  <button class="refresh save" id="setSave" disabled>Save settings</button>
+</details>
+
+<button class="refresh" id="refresh">Refresh</button>
+<div class="note" id="updated"></div>
+
+<script>
+(function () {
+  var BUCKET_MS = 10 * 60 * 1000;
+  var BUCKETS = 18;                 // 18 x 10 min = last 3 hours
+  var MARK_SH = 'fatal error (received|without message)|watchdog (received|without message)';
+  var CRASH_RE = /fatal error (received|without message)|watchdog (received|without message)/;
+  var ST = null;                    // live module state, null when it could not be read
+  // The manager's exit code is not reliable on every phone, so success is decided
+  // from marker lines printed by the commands, never from errno.
+  var LOG_CMD = 'echo @@BEGIN; cat /data/local/tmp/modem_crash_reasons.log.old /data/local/tmp/modem_crash_reasons.log 2>/dev/null; echo @@END';
+  var BOOT_CMD = 'echo "@@COUNT=$(dmesg 2>/dev/null | grep -cE \'' + MARK_SH + '\')"; echo "@@LINES=$(dmesg 2>/dev/null | wc -l)"; echo "@@UP=$(cut -d\' \' -f1 /proc/uptime)"';
+  var UP_CMD = 'cat /proc/uptime';
+  // Live state: modem recovery value(s), module processes, boot reason, lifetime counter, guard line.
+  // The [s] in the pgrep pattern keeps the pattern from matching this very command line.
+  var STATE_CMD = 'for r in /sys/class/remoteproc/remoteproc*; do n=$(cat $r/name 2>/dev/null); case "$n" in *mss*|*modem*) echo "@@REC=$(cat $r/recovery 2>/dev/null)";; esac; done; ' +
+    'echo "@@PROCS=$(pgrep -f \'modem_recovery_enable/[s]ervice.sh\' 2>/dev/null | wc -l)"; ' +
+    'echo "@@REASON=$(getprop sys.boot.reason)"; ' +
+    'echo "@@TOTAL=$(cat /data/local/tmp/.crash_total 2>/dev/null)"; ' +
+    'echo "@@GUARD=$(cat /data/local/tmp/.guard_ui 2>/dev/null | head -n 1)"; ' +
+    'if [ -f /data/local/tmp/.logging_off ]; then echo "@@LOGOFF=1"; else echo "@@LOGOFF=0"; fi; ' +
+    'echo @@STATE_DONE';
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---- run a shell command through the manager (same bridge as the kernelsu helper) ----
+  // Always resolves {errno, out, err}; it only rejects when the bridge itself is missing or silent.
+  function run(cmd) {
+    return new Promise(function (resolve, reject) {
+      if (typeof ksu === 'undefined' || typeof ksu.exec !== 'function') {
+        reject(new Error('no ksu.exec')); return;
+      }
+      var name = 'exec_cb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+      var done = false;
+      var timer = setTimeout(function () {
+        if (done) return;
+        done = true; delete window[name];
+        reject(new Error('timeout'));
+      }, 20000);
+      window[name] = function (errno, stdout, stderr) {
+        if (done) return;
+        done = true; clearTimeout(timer); delete window[name];
+        resolve({ errno: errno, out: String(stdout || ''), err: String(stderr || '') });
+      };
+      try { ksu.exec(cmd, '{}', name); }
+      catch (e) { done = true; clearTimeout(timer); delete window[name]; reject(e); }
+    });
+  }
+  function attempt(cmd) {             // never rejects
+    return run(cmd).catch(function (e) {
+      return { errno: -1, out: '', err: String(e && e.message || e) };
+    });
+  }
+  function why(r) {                   // short text for the error line
+    var t = (r.err || r.out || '').replace(/\s+/g, ' ').trim().slice(0, 90);
+    return 'errno ' + r.errno + (t ? ' ' + t : '');
+  }
+
+  // ---- parsing ----
+  // Log lines start with: "Mon Nov  9 09:49:04 PST 2026 [ ...kernel text... fatal error received ..."
+  // Only the numbers are used; the time zone label is ignored.
+  var DATE_RE = /^\s*[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})\s+(\S+)\s+(\d{4})/;
+  var MONTHS = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
+
+  function parseLine(line) {
+    var m = DATE_RE.exec(line);
+    if (!m || !(m[1] in MONTHS)) return null;
+    // A root shell without a time zone prints UTC: read those stamps as UTC so the chart and the
+    // "last crash" time line up with the phone's clock. Any other label is taken as local time.
+    var utc = /^(UTC|GMT|Z)$/i.test(m[6]);
+    var ms = utc ? Date.UTC(+m[7], MONTHS[m[1]], +m[2], +m[3], +m[4], +m[5])
+                 : new Date(+m[7], MONTHS[m[1]], +m[2], +m[3], +m[4], +m[5]).getTime();
+    return { ms: ms };
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function hhmm(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+
+  function analyse(logText, bootCount, now) {
+    var lines = logText.split('\n');
+    var crashes = [];
+    for (var i = 0; i < lines.length; i++) {
+      if (CRASH_RE.test(lines[i])) crashes.push(lines[i]);
+    }
+    var last = null;
+    if (crashes.length) {
+      var t = parseLine(crashes[crashes.length - 1]);
+      if (t) {
+        var td = new Date(t.ms);
+        var same = td.toDateString() === now.toDateString();
+        last = same ? hhmm(td) : td.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      }
+    }
+    // chart: 18 ten-minute buckets, the last one is the current 10 minutes
+    var lastStart = new Date(now.getTime());
+    lastStart.setMinutes(Math.floor(lastStart.getMinutes() / 10) * 10, 0, 0);
+    var firstStart = lastStart.getTime() - (BUCKETS - 1) * BUCKET_MS;
+    var buckets = [];
+    for (var b = 0; b < BUCKETS; b++) buckets.push(0);
+    for (var c = 0; c < crashes.length; c++) {
+      var p = parseLine(crashes[c]);
+      if (!p) continue;
+      var idx = Math.floor((p.ms - firstStart) / BUCKET_MS);
+      if (idx >= 0 && idx < BUCKETS) buckets[idx]++;
+    }
+    return {
+      logged: crashes.length, boot: bootCount, last: last, buckets: buckets,
+      axisStart: hhmm(new Date(firstStart)), axisEnd: hhmm(now)
+    };
+  }
+
+  // ---- drawing ----
+  function drawChart(buckets) {
+    var chart = $('chart');
+    chart.innerHTML = '';
+    var max = 1, peak = 0, total = 0;
+    for (var i = 0; i < buckets.length; i++) { total += buckets[i]; if (buckets[i] > peak) peak = buckets[i]; }
+    if (peak > max) max = peak;
+    $('chartSub').textContent = peak ? 'Last 3 hours - peak ' + peak + ' per 10 min' : 'Last 3 hours';
+    chart.setAttribute('aria-label', 'Crashes per 10 minutes, last 3 hours: ' + total + ' crashes' + (peak ? ', peak ' + peak + ' in one slot' : ''));
+    buckets.forEach(function (n) {
+      var col = document.createElement('div');
+      col.className = 'col';
+      if (n > 0) col.title = n + (n === 1 ? ' crash' : ' crashes');
+      if (n > 0) {                       // zero buckets draw no bar
+        var bar = document.createElement('div');
+        bar.className = 'bar';
+        bar.style.height = Math.max(4, Math.round(n / max * 100)) + '%';
+        col.appendChild(bar);
+      }
+      chart.appendChild(col);
+    });
+  }
+
+  function parseState(r) {            // -> {rec[], procs, reason, total, guard} or null
+    if (r.out.indexOf('@@STATE_DONE') === -1) return null;
+    var rec = [], re = /@@REC=([^\r\n]*)/g, m;
+    while ((m = re.exec(r.out)) !== null) rec.push(m[1].trim());
+    var p = /@@PROCS=\s*(\d+)/.exec(r.out), t = /@@TOTAL=\s*(\d+)/.exec(r.out);
+    var why = /@@REASON=([^\r\n]*)/.exec(r.out), g = /@@GUARD=([^\r\n]*)/.exec(r.out), lo = /@@LOGOFF=(\d)/.exec(r.out);
+    return {
+      rec: rec, procs: p ? parseInt(p[1], 10) : null, total: t ? parseInt(t[1], 10) : null,
+      reason: why ? why[1].trim() : '', guard: g ? g[1].trim() : '', logoff: !!lo && lo[1] === '1'
+    };
+  }
+  function recOff() { return !!ST && ST.rec.some(function (v) { return v !== 'enabled'; }); }
+  function svcOff() { return !!ST && ST.procs !== null && ST.procs < 2; }   // recovery loop + worker
+  var CRASHY = /modem|mss|subsys|ssr|panic|watchdog|wdog|rpm|pmic/i;
+  function setKv(id, text, cls) { var el = $(id); el.textContent = text; el.className = cls || ''; }
+  function applyState() {
+    if (!ST) { setKv('kRec', 'unknown'); setKv('kSvc', 'unknown'); setKv('kGuard', 'unknown'); setKv('kBoot', 'unknown'); return; }
+    if (!ST.rec.length) setKv('kRec', 'no modem remoteproc found', 'bad');
+    else if (recOff()) setKv('kRec', 'OFF (re-applied every second)', 'bad');
+    else setKv('kRec', 'enabled', 'good');
+    if (ST.procs === null) setKv('kSvc', 'unknown');
+    else if (svcOff()) setKv('kSvc', 'NOT running', 'bad');
+    else setKv('kSvc', 'running', 'good');
+    setKv('kGuard', ST.guard || 'no status yet (available after boot)');
+    setKv('kBoot', ST.reason || 'unknown', ST.reason && CRASHY.test(ST.reason) ? 'bad' : '');
+  }
+
+  function setHead(text, ok, sub) {
+    $('headline').textContent = text;
+    $('dot').className = ok ? 'dot ok' : 'dot';
+    $('subline').textContent = sub;
+  }
+
+  function showError(detail) {
+    setHead("Can't read logs", false, 'Tap Refresh to try again');
+    $('nLogged').textContent = '-';
+    $('nBoot').textContent = '-';
+    $('nLast').textContent = '-';
+    drawChart([]);
+    $('axisStart').textContent = '';
+    $('axisEnd').textContent = '';
+    $('updated').textContent = detail || '';
+  }
+
+  function show(r, now) {
+    var logged = r.logged;                        // the module's lifetime counter survives log rotation
+    if (ST && ST.total !== null && ST.total > logged) logged = ST.total;
+    $('nLogged').textContent = logged;
+    $('nBoot').textContent = r.boot;
+    $('nLast').textContent = r.last || '-';
+    if (recOff()) setHead('Recovery is OFF', false, 'The module re-applies it every second; if this stays, check the log');
+    else if (svcOff()) setHead('Module service is not running', false, 'Reboot, or check the module is enabled in the manager');
+    else if (r.boot > 0) setHead('Modem restarting, phone stays up', false, r.boot + (r.boot === 1 ? ' crash' : ' crashes') + ' since this boot');
+    else if (ST && ST.logoff) setHead('Logging is off', true, 'Recovery still works. Crashes are not being recorded.');
+    else if (ST && ST.reason && CRASHY.test(ST.reason)) setHead('Phone rebooted after a crash?', false, 'Boot reason: ' + ST.reason + ' (no crash in this boot yet)');
+    else if (logged > 0) setHead('No crashes this boot', true, 'Older crashes are in the log');
+    else setHead('No crashes logged', true, 'Nothing in the log yet');
+    drawChart(r.buckets);
+    $('axisStart').textContent = r.axisStart;
+    $('axisEnd').textContent = r.axisEnd;
+    $('updated').textContent = 'Updated ' + hhmm(now) + ':' + pad(now.getSeconds());
+  }
+
+  // ---- load / refresh ----
+  function countSince(logText, sinceMs) {
+    var n = 0, lines = logText.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (!CRASH_RE.test(lines[i])) continue;
+      var t = parseLine(lines[i]);
+      if (t && t.ms >= sinceMs) n++;
+    }
+    return n;
+  }
+  function parseLog(r) {              // -> text between the markers, or null
+    var i = r.out.indexOf('@@BEGIN'), j = r.out.lastIndexOf('@@END');
+    if (i === -1 || j === -1 || j < i) return null;
+    return r.out.slice(i + 7, j);
+  }
+  function parseBoot(r) {             // -> count, or null when dmesg gave nothing
+    var c = /@@COUNT=(\d+)/.exec(r.out), l = /@@LINES=(\d+)/.exec(r.out);
+    if (!c || !l || parseInt(l[1], 10) === 0) return null;
+    return parseInt(c[1], 10);
+  }
+
+  function parseUp(r) {               // -> seconds since boot, or null
+    var m = /@@UP=([0-9.]+)/.exec(r.out);
+    var v = m ? parseFloat(m[1]) : NaN;
+    return isFinite(v) ? v : null;
+  }
+
+  var busy = false;
+  function load() {
+    if (busy) return;
+    busy = true;
+    var btn = $('refresh');
+    btn.disabled = true;
+    var logText = null, logRes, bootRes, count = null, estimated = false, bootWhy = '', upSecs = null;
+    attempt(STATE_CMD).then(function (s) {
+      ST = parseState(s); applyState();
+      return attempt(LOG_CMD);
+    }).then(function (r) {
+      logRes = r; logText = parseLog(r);
+      return attempt(BOOT_CMD);
+    }).then(function (r) {
+      bootRes = r; count = parseBoot(r); upSecs = parseUp(r);
+      if (count === null) bootWhy = 'dmesg: ' + why(r);
+      if (upSecs !== null || (count !== null && logText === null)) return null;
+      return attempt(UP_CMD);           // uptime was not in the first reply
+    }).then(function (u) {
+      if (u) {
+        var secs = parseFloat(u.out.split(' ')[0]);
+        if (isFinite(secs)) upSecs = secs;
+      }
+      // The kernel log can wrap and forget old crashes; the module's own log does not.
+      // "This boot" is the larger of the two counts.
+      if (logText !== null && upSecs !== null) {
+        var fromLog = countSince(logText, Date.now() - upSecs * 1000);
+        if (count === null) { count = fromLog; estimated = true; }
+        else if (fromLog > count) count = fromLog;
+      }
+      var now = new Date();             // the phone's own clock
+      if (logText === null || count === null) {
+        showError((logText === null ? 'log: ' + why(logRes) + '  ' : '') + bootWhy);
+        return;
+      }
+      show(analyse(logText, count, now), now);
+      if (estimated) {
+        $('subline').textContent += ' (estimated from log)';
+        $('updated').textContent += ' - ' + bootWhy;
+      }
+    }).catch(function (e) {
+      showError('page error: ' + (e && e.message || e));
+    }).then(function () {
+      return loadBreaker();
+    }).then(function () {
+      return loadSettings();
+    }).then(function () {
+      busy = false;
+      btn.disabled = false;
+    });
+  }
+
+  // ---- Airplane breaker switch (Phase 4) ----
+  var CFG = '/data/adb/modem_recovery_enable/config.txt';
+  var FLAG = '/data/local/tmp/modem_breaker_on';   // the module also honours this flag file
+  var BR_DEFAULT = 'Turns on airplane mode to stop a crash loop';
+  var BR_READ = 'if [ -f ' + CFG + ' ]; then echo "@@CFG=1"; echo "@@BREAKER=$(sed -n \'s/^breaker=//p\' ' + CFG +
+    ' | tail -n 1 | tr -d \'\\r \')"; else echo "@@CFG=0"; fi; if [ -f ' + FLAG + ' ]; then echo "@@FLAG=1"; else echo "@@FLAG=0"; fi; echo @@DONE';
+  function brWrite(val) {
+    return 'if grep -q "^breaker=" ' + CFG + '; then sed -i "s/^breaker=.*/breaker=' + val + '/" ' + CFG +
+           '; else printf "\\nbreaker=' + val + '\\n" >> ' + CFG + '; fi; ' + BR_READ;
+  }
+  var brBusy = false;
+
+  function brNote(text, warn) {
+    var el = $('brSub');
+    el.textContent = text || BR_DEFAULT;
+    el.className = warn ? 'sub warn' : 'sub';
+  }
+  function parseBreaker(r) {          // -> {cfg, flag, on} or null
+    if (r.out.indexOf('@@DONE') === -1) return null;
+    var cfg = /@@CFG=(\d)/.exec(r.out), flag = /@@FLAG=(\d)/.exec(r.out), b = /@@BREAKER=([^\r\n]*)/.exec(r.out);
+    if (!cfg || !flag) return null;
+    return { cfg: cfg[1] === '1', flag: flag[1] === '1', on: !!b && b[1] === 'on' };
+  }
+  function applyBreaker(st) {
+    var box = $('breaker');
+    if (!st.cfg) {                    // module has not created config.txt yet
+      box.checked = false; box.disabled = true; brNote('Available after boot', true);
+    } else if (st.flag) {             // flag file forces it on; the page will not delete files
+      box.checked = true; box.disabled = true;
+      brNote('Always on: forced by the file modem_breaker_on', true);
+    } else {
+      box.checked = st.on; box.disabled = false; brNote('', false);
+    }
+  }
+  function loadBreaker() {
+    return attempt(BR_READ).then(function (r) {
+      var st = parseBreaker(r);
+      if (!st) { $('breaker').disabled = true; brNote("Can't read the setting (" + why(r) + ')', true); return; }
+      applyBreaker(st);
+    });
+  }
+  $('breaker').addEventListener('change', function () {
+    if (brBusy) return;
+    brBusy = true;
+    var box = $('breaker'), want = box.checked ? 'on' : 'off';
+    box.disabled = true;
+    attempt(brWrite(want)).then(function (r) {
+      var st = parseBreaker(r);
+      if (!st) { brNote("Couldn't change the setting", true); return loadBreaker(); }
+      applyBreaker(st);
+      if (st.cfg && !st.flag && st.on !== (want === 'on')) brNote("Couldn't change the setting", true);
+    }).then(function () { brBusy = false; });
+  });
+
+  // ---- Settings card: edits the root-only config.txt ----
+  var SET_KEYS = ['logging','sim_guard','problem_sim','confirm_problem_sim','auto_on','retry_minutes','stable_minutes','strong_rsrp','max_retries','purge_on_uninstall'];
+  var SET_DEF = { logging:'off', sim_guard:'off', problem_sim:'', confirm_problem_sim:'yes', auto_on:'on', retry_minutes:'10', stable_minutes:'5', strong_rsrp:'-100', max_retries:'3', purge_on_uninstall:'yes' };
+  var SET_NUM = { retry_minutes:[1,120], stable_minutes:[1,120], strong_rsrp:[-140,-40], max_retries:[1,20] };
+  var SET_BOOL = { logging:'s_logging', sim_guard:'s_sim_guard', confirm_problem_sim:'s_confirm', auto_on:'s_auto_on', purge_on_uninstall:'s_purge' };
+  var SET_VAL = null;                 // values as last read from the file
+  var SET_READ = 'if [ -f ' + CFG + ' ]; then echo "@@SCFG=1"; for k in ' + SET_KEYS.join(' ') + '; do echo "@@K_$k=$(sed -n "s/^$k=//p" ' + CFG +
+    ' | tail -n 1 | tr -d "\\r" | sed "s/^ *//; s/ *$//")"; done; else echo "@@SCFG=0"; fi; echo @@SDONE';
+  var SET_FN = 'setkv() { grep -v "^$1=" ' + CFG + ' > ' + CFG + '.tmp 2>/dev/null; printf "%s=%s\\n" "$1" "$2" >> ' + CFG + '.tmp; chmod 600 ' + CFG + '.tmp; mv -f ' + CFG + '.tmp ' + CFG + '; }; ';
+  var setBusy = false;
+  function setNote(text, warn) { var el = $('setSub'); el.textContent = text; el.className = warn ? 'sub warn' : 'sub'; }
+  function parseSettings(r) {         // -> {cfg, v{}} or null
+    if (r.out.indexOf('@@SDONE') === -1) return null;
+    var c = /@@SCFG=(\d)/.exec(r.out); if (!c) return null;
+    var v = {};
+    SET_KEYS.forEach(function (k) { var m = new RegExp('@@K_' + k + '=([^\\r\\n]*)').exec(r.out); v[k] = m ? m[1] : ''; });
+    return { cfg: c[1] === '1', v: v };
+  }
+  function fieldVal(k) {
+    if (SET_BOOL[k]) {
+      var on = $(SET_BOOL[k]).checked;
+      return (k === 'confirm_problem_sim') ? (on ? 'yes' : 'no') : (on ? (k === 'purge_on_uninstall' ? 'yes' : 'on') : (k === 'purge_on_uninstall' ? 'no' : 'off'));
+    }
+    return $('s_' + k).value.trim();
+  }
+  function setFields(st) {
+    var on = st.cfg;
+    SET_VAL = {};
+    SET_KEYS.forEach(function (k) {
+      var raw = st.v[k] === '' ? SET_DEF[k] : st.v[k];
+      if (k === 'problem_sim' && /^(YourProvider|YourOperator)$/.test(raw)) raw = '';
+      SET_VAL[k] = raw;
+      if (SET_BOOL[k]) {
+        var el = $(SET_BOOL[k]);
+        el.checked = (k === 'logging') ? raw === 'on' : (k === 'confirm_problem_sim') ? raw !== 'no' : (k === 'purge_on_uninstall' ? raw === 'yes' : raw !== 'off');
+        el.disabled = !on;
+      } else { var f = $('s_' + k); f.value = raw; f.disabled = !on; }
+    });
+    syncAutoOnUi(false);
+    $('setSave').disabled = !on;
+    setNote(on ? 'Saved in the root-only config file' : 'Available after boot', !on);
+  }
+  function syncAutoOnUi(force) {       // auto_on switch follows the SIM guard: off with it, on again with it
+    var g = $('s_sim_guard'), a = $('s_auto_on');
+    if (force) a.checked = g.checked;
+    a.disabled = true;   // not editable: it follows the SIM guard
+    $('auto_txt').textContent = a.checked ? 'On' : 'Off';
+  }
+  $('s_sim_guard').addEventListener('change', function () { syncAutoOnUi(true); });
+  function settingsDirty() {          // true when a field differs from what was last read (unsaved edit)
+    if (!SET_VAL) return false;
+    return SET_KEYS.some(function (k) { return fieldVal(k) !== SET_VAL[k]; });
+  }
+  function loadSettings() {
+    if (settingsDirty()) { setNote('Unsaved changes kept. Tap Save settings.', true); return Promise.resolve(); }
+    return attempt(SET_READ).then(function (r) {
+      var st = parseSettings(r);
+      if (!st) { setNote("Can't read the settings (" + why(r) + ')', true); $('setSave').disabled = true; return; }
+      setFields(st);
+    });
+  }
+  function validate(k, val) {         // -> error text or ''
+    if (k === 'problem_sim') return /^[^'"\\`$\r\n|]{0,40}$/.test(val) ? '' : "Provider name can't contain quotes or \\ ` $ |";
+    if (SET_NUM[k]) {
+      var n = SET_NUM[k];
+      if (!/^-?\d+$/.test(val) || +val < n[0] || +val > n[1]) return k.replace(/_/g, ' ') + ' must be ' + n[0] + ' to ' + n[1];
+    }
+    return '';
+  }
+  $('setSave').addEventListener('click', function () {
+    if (setBusy || !SET_VAL) return;
+    if (SET_VAL.logging === 'on' && fieldVal('logging') === 'off') {   // turning logs off deletes them: ask first
+      $('delAsk').hidden = false; $('setSave').disabled = true; return;
+    }
+    doSave();
+  });
+  $('delNo').addEventListener('click', function () { $('delAsk').hidden = true; $('setSave').disabled = !SET_VAL; });
+  $('delYes').addEventListener('click', function () { $('delAsk').hidden = true; doSave(); });
+  function doSave() {
+    if (setBusy || !SET_VAL) return;
+    var cmd = SET_FN, changed = 0, bad = '';
+    SET_KEYS.forEach(function (k) {
+      if (bad) return;
+      var val = fieldVal(k);
+      if (val === SET_VAL[k]) return;
+      bad = validate(k, val);
+      if (bad) return;
+      cmd += 'setkv ' + k + " '" + val + "'; "; changed++;
+    });
+    if (bad) { setNote(bad, true); return; }
+    if (!changed) { setNote('Nothing changed', false); return; }
+    setBusy = true; $('setSave').disabled = true;
+    attempt(cmd + SET_READ).then(function (r) {
+      var st = parseSettings(r);
+      if (!st) { setNote("Couldn't save (" + why(r) + ')', true); return; }
+      var ok = true;
+      SET_KEYS.forEach(function (k) { if (fieldVal(k) !== (st.v[k] === '' ? SET_DEF[k] : st.v[k]) && !(k === 'problem_sim' && fieldVal(k) === '' )) ok = false; });
+      setFields(st);
+      setNote(ok ? 'Saved. Applies on the next crash.' : "Some values didn't save", !ok);
+    }).then(function () { setBusy = false; $('setSave').disabled = !SET_VAL; });
+  }
+
+  $('refresh').addEventListener('click', load);
+  load();
+})();
+</script>
+</body>
+</html>
